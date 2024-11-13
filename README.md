@@ -15,7 +15,11 @@ Yet another source for the calculation is outside temperature, which is also pro
 At the end, for every zone boiler setpoint (target water temperature in heating system) is calculated, 
 which depends on zone setpoint (target temperature in the zone), current zone temperature, current 
 outside temperature and heating parameter for given zone. For calculations, I use some kind of heating curve,
-partly semi-empirical partly borrowed via reverse engineering.
+partly semi-empirical partly borrowed via reverse engineering. And then, once we know what temperature water
+is required for every zone, we simply choose maximal and comminicate it to the boiler. Assumption is that TRVs in 'warmer'
+zones will deal excess of heat.  In principal, it is possible to do all kind of smooth transitions, quadratica averages etc. I did them in previous iteration of this software 10 years ago. But, it looks like it current simple approach works reasonably well.
+Also controller reports back (via MQTT) about zone with maximal boiler setpoint and zone with maximal difference between zone temperature and zone setpoint. Gathering those stats helps to tune heating parameters.
+
 
 ## About usage
 Code is written in GO. You can run it with `make run`.
