@@ -10,7 +10,7 @@ Assumption is that all communication happens via MQTT. For defined zones, MZOTBC
 collects data  from thermal sensors. MQTT topics can be either plain text, or JSON formatted.
 It is possible to have multiple thermal sensors per zone. Then weighted average will be used 
 (by default weights are 1). For every zone controller also watch for current zone setpoints, also per MQTT.
-Additionally, for every zone is defined heating parmeter (either explicitly or default one us used).
+Additionally, for every zone, there is defined heating parmeter (either explicitly or default one us used).
 Yet another source for the calculation is outside temperature, which is also provided on MQTT topic.
 At the end, for every zone boiler setpoint (target water temperature in heating system) is calculated, 
 which depends on zone setpoint (target temperature in the zone), current zone temperature, current 
