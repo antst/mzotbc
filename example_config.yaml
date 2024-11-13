@@ -1,0 +1,31 @@
+default_heating_parameter: 14
+log_level: info
+mqtt:
+  url: tcp://192.168.2.9:1883
+  control_topic: mzotbc/control
+outside:
+  temperature_sensors:
+    - topic: zigbee2mqtt/outside_ht
+      json_entry: temperature
+boiler:
+  tset_topic: myOTGW/set/otgw/ctrlsetpt
+  ch_enable_topic: myOTGW/set/otgw/chenable
+zones:
+  kitchen: 
+    heating_parameter: 19
+    setpoint: 
+      topic: homeassistant/climate/kitchenthermo/temperature
+    sensors:
+      - topic: zigbee2mqtt/kitchen_ht
+        json_entry: temperature
+  living_room:
+    heating_parameter: 16
+    setpoint:
+      topic: homeassistant/climate/livingthermo/temperature
+    sensors:
+      - topic: myOTGW/value/otgw/Tr
+        weight: 1
+      - topic: zigbee2mqtt/dining_ht
+        json_entry: temperature
+        weight: 1
+    sensors_average_type: mean
