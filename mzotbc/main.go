@@ -18,26 +18,16 @@
 
 package main
 
-// SetpointConfig config
-type SetpointConfig struct {
-	Topic     string   `yaml:"topic"`
-	JSONEntry *string  `yaml:"json_entry,omitempty"`
-	Offset    *float64 `yaml:"offset"`
-	Scale     *float64 `yaml:"scale"`
-}
+import (
+	"github.com/antst/mzotbc/internal"
+	"github.com/antst/mzotbc/internal/logger"
+)
 
-func NewSetpointConfig() *SetpointConfig {
-	cfg := &SetpointConfig{}
-	cfg.FillDefaults()
-	return cfg
-}
+// Build version, overridden with flag during build.
+var version = "devel"
 
-func (c *SetpointConfig) FillDefaults() SetpointConfig {
-	if c.Offset == nil {
-		c.Offset = GetPTR(0.0)
-	}
-	if c.Scale == nil {
-		c.Scale = GetPTR(1.0)
-	}
-	return *c
+func main() {
+	logger.L().Warnf("OT Boiler Controller, version: %+v", version)
+	c := internal.NewThermoController()
+	c.Run()
 }

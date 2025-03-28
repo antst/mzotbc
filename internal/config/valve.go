@@ -16,37 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package config
 
-import (
-	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
-)
-
-const CREATE_TABLES string = `
-CREATE TABLE IF NOT EXISTS zone (
-  zone_name string NOT NULL  PRIMARY KEY,
-  setpoint float NOT NULL,
-  updated_at timestamp DEFAULT CURRENT_TIMESTAMP
-  );
-CREATE TABLE IF NOT EXISTS sensor (
-    sensor_name string NOT NULL,
-    value float NOT NULL,
-    updated_at timestamp DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (sensor_name)
-  ) ;
-`
-
-func OpenDatabase(db_file string) *sqlx.DB {
-	dbf := db_file
-	DB, err := sqlx.Open("sqlite3", dbf)
-	if checkError(err) {
-		L().Panic(err)
-	}
-	DB.SetMaxOpenConns(100)
-	if _, err := DB.Exec(CREATE_TABLES); err != nil {
-		L().Panic(err)
-	}
-
-	return DB
+type ValveConfig struct {
+	Topic     string  `yaml:"topic"`
+	JSONEntry *string `yaml:"json_entry,omitempty"`
 }

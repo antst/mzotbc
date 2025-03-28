@@ -16,14 +16,4 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
-
-type sensorGroupConfig struct {
-	AverageFuncType string          `yaml:"average_type,omitempty"`
-	items           []*SensorConfig `yaml:"items"`
-}
-
-type sensorGroup struct {
-	sensors     []*SensorController
-	averageFunc string
-}
+package internal

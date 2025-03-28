@@ -16,39 +16,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package internal
 
 import (
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	"sync"
-	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/antst/mzotbc/internal/config"
+	"github.com/antst/mzotbc/internal/logger"
+	"github.com/antst/mzotbc/internal/safe_mqtt"
+
+	"github.com/antst/mzotbc/internal/db"
 )
 
-type BoilerConfig struct {
-	TSetTopic      string        `yaml:"tset_topic"`
-	CHEnableTopic  string        `yaml:"ch_enable_topic,omitempty"`
-	UpdateInterval time.Duration `yaml:"update_interval"`
-}
-
-func NewBoilerConfig() *BoilerConfig {
-	cfg := &BoilerConfig{}
-	cfg.TSetTopic = "test_OTGW/set/otgw/tset"
-	cfg.CHEnableTopic = "test_OTGW/set/otgw/ch_enable"
-	return cfg
-}
-
 type BoilerController struct {
-	lock sync.Mutex
-	cfg  *BoilerConfig
-	mqtt MqttClient
-	db   *sqlx.DB
+	lock    sync.Mutex
+	cfg     *config.BoilerConfig
+	mqtt    safe_mqtt.MqttClient
+	queries *db.Queries
 }
 
-func NewBoilerController(_cfg *BoilerConfig, _mqttCfg *MQTTConfig, _db *sqlx.DB) *BoilerController {
-	b := &BoilerController{cfg: _cfg, db: _db}
-	b.mqtt = InitMQTTClient(_mqttCfg.URL, "otbs-boiler-"+uuid.New().String())
+func NewBoilerController(_cfg *config.BoilerConfig, _mqttCfg *config.MQTTConfig, _q *db.Queries) *BoilerController {
+	b := &BoilerController{cfg: _cfg, queries: _q}
+	b.mqtt = safe_mqtt.InitMQTTClient(_mqttCfg.URL, "otbs-boiler-"+uuid.New().String())
 	//b.mqtt.SafeSubscribe(_cfg.Topic, 1, b.TemperatureUpdateHandler)
 
 	return b
@@ -59,7 +51,7 @@ func (b *BoilerController) Update(Tset float64, chEnable bool) {
 	if token := b.mqtt.SafePublish(
 		b.cfg.TSetTopic, 1, true, fmt.Sprintf("%.1f", Tset),
 	); token.Wait() && token.Error() != nil {
-		L().Error(token.Error())
+		logger.L().Error(token.Error())
 	}
 
 	SchEnable := "0"
@@ -70,6 +62,6 @@ func (b *BoilerController) Update(Tset float64, chEnable bool) {
 	if token := b.mqtt.SafePublish(
 		b.cfg.CHEnableTopic, 1, true, SchEnable,
 	); token.Wait() && token.Error() != nil {
-		L().Error(token.Error())
+		logger.L().Error(token.Error())
 	}
 }

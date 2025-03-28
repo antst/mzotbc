@@ -16,4 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package internal
+
+const (
+	childChanBuffer = 10
+	mqttQoS         = 1
+)

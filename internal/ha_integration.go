@@ -16,9 +16,4 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
-
-type ValveConfig struct {
-	Topic     string  `yaml:"topic"`
-	JSONEntry *string `yaml:"json_entry,omitempty"`
-}
+package internal

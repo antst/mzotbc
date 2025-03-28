@@ -16,35 +16,38 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package config
 
 import (
 	"fmt"
-	"github.com/pborman/getopt/v2"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/yaml.v3"
 	"io"
 	"log"
 	"os"
+
+	"github.com/antst/mzotbc/internal/logger"
+
+	"github.com/pborman/getopt/v2"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/yaml.v3"
 )
+
+const (
+	defaultMQTTURL          = "tcp://127.0.0.1:1883"
+	defaultControlTopic     = "mzotbc/control"
+	defaultDBFile           = "~/.mzotbc.db"
+	defaultConfigFile       = "config.yaml"
+	DefaultAverageType      = "mean"
+	zoneDefaultWeight       = 1.0
+	zoneDefaultCompensation = 1.5
+)
+
+var defaultHeatingParam = 15.0
 
 type HeatDemandConfig struct {
 	Topic     string   `yaml:"topic"`
 	JSONEntry *string  `yaml:"json_entry,omitempty"`
 	Weight    *float64 `yaml:"weight"`
 	Scale     *float64 `yaml:"scale"`
-}
-
-func NewMQTTConfig() *MQTTConfig {
-	cfg := &MQTTConfig{}
-	cfg.URL = "tcp://127.0.0.1:1883"
-	cfg.ControlTopic = "mzotbc/control"
-	return cfg
-}
-
-type MQTTConfig struct {
-	URL          string `yaml:"url"`
-	ControlTopic string `yaml:"control_topic"`
 }
 
 type Config struct {
@@ -59,21 +62,24 @@ type Config struct {
 }
 
 func defConfig() *Config {
-	cfg := new(Config)
-	cfg.Zones = make(map[string]*ZoneConfig)
-	cfg.Boiler = NewBoilerConfig()
-	cfg.Outside = NewOutsideConfig()
-	cfg.MQTTConfig = NewMQTTConfig()
-	cfg.DefaultHeatingParameter = GetPTR(15.0)
-	cfg.HAIntegration = true
-	cfg.DBFile = "~./mzotbc.db"
-	return cfg
+	return &Config{
+		Zones:                   make(map[string]*ZoneConfig),
+		Boiler:                  NewBoilerConfig(),
+		Outside:                 NewOutsideConfig(),
+		MQTTConfig:              NewMQTTConfig(),
+		DefaultHeatingParameter: &defaultHeatingParam,
+		HAIntegration:           true,
+		DBFile:                  defaultDBFile,
+	}
 }
 
 func prettyPrint(cfg *Config) {
 	d, err := yaml.Marshal(cfg)
-	checkError(err)
-	L().Debugf("--- Config ---\n%s\n\n", string(d))
+	if err != nil {
+		logger.L().Error("Failed to marshal config for pretty print", err)
+		return
+	}
+	logger.L().Debugf("--- Config ---\n%s\n\n", string(d))
 }
 
 func (cfg *Config) FillDefaults() {
@@ -83,58 +89,47 @@ func (cfg *Config) FillDefaults() {
 	cfg.Outside.FillDefaults()
 
 	if cfg.DefaultHeatingParameter == nil {
-		cfg.DefaultHeatingParameter = GetPTR(15.0)
+		cfg.DefaultHeatingParameter = &defaultHeatingParam
 	}
-
 }
-func getConfig() (*Config, error) {
+
+func Get() *Config {
 	cfg := defConfig()
-	logLevel := getopt.String(
-		'l', "", "log levels:\"debug\", \"info\", \"warn\", \"error\", \"dpanic\", \"panic\", and \"fatal\"",
-	)
-	db_file := getopt.String('d', cfg.DBFile, "DB file pathname")
-	cfg_file := getopt.String('c', "config.yaml", "config file pathname")
+	logLevel := getopt.StringLong("log-level", 'l', "", "log levels: debug, info, warn, error, dpanic, panic, fatal")
+	configFile := getopt.StringLong("config", 'c', defaultConfigFile, "config file pathname")
 
-	parseOpts()
+	getopt.Parse()
 
-	if err := readFile(cfg, *cfg_file); err != nil {
-		log.Panicf("getConfig: %w", err)
+	if err := readFile(cfg, *configFile); err != nil {
+		log.Panicf("GetConfig: %v", err)
 	}
-	if db_file != nil && *db_file != "" {
-		cfg.DBFile = *db_file
-	} else {
-		L().Errorf("Wrong DB pathname `%v`", db_file)
+
+	logger.L().Infof("Using config file `%v`", *configFile)
+	dbFile := getopt.StringLong("db", 'd', cfg.DBFile, "DB file pathname")
+	logger.L().Infof("Using DB file `%v`", cfg.DBFile)
+
+	if *dbFile != "" {
+		cfg.DBFile = *dbFile
 	}
+	logger.L().Infof("Using DB file `%v`", cfg.DBFile)
 
 	cfg.FillDefaults()
+
 	if *logLevel != "" {
-		err := cfg.LogLevel.Set(*logLevel)
-		if checkError(err) {
-			L().Errorf("Wrong log level `%v`", *logLevel)
+		if err := cfg.LogLevel.Set(*logLevel); err != nil {
+			logger.L().Errorf("Wrong log level `%v`: %v", *logLevel, err)
 		}
 	}
-	setLogLevel(zapcore.Level(cfg.LogLevel))
+	logger.SetLogLevel(cfg.LogLevel)
 
 	prettyPrint(cfg)
 
-	return cfg, nil
+	return cfg
 }
 
 func fileExists(filename string) bool {
 	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-func parseOpts() {
-	helpFlag := false
-	getopt.Flag(&helpFlag, 'h', "display help")
-	getopt.Parse()
-	if helpFlag {
-		getopt.Usage()
-		os.Exit(0)
-	}
+	return err == nil && !info.IsDir()
 }
 
 func readFile(cfg *Config, configFileName string) error {
@@ -149,15 +144,14 @@ func readFile(cfg *Config, configFileName string) error {
 	defer f.Close()
 
 	data, err := io.ReadAll(f)
-	if err != nil {
-		if err != io.EOF {
-			return fmt.Errorf("failed to read config file: %w", err)
-		}
-		return nil
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return fmt.Errorf("failed to unmarhal config: %w", err)
+	if len(data) > 0 {
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return fmt.Errorf("failed to unmarshal config: %w", err)
+		}
 	}
 
 	return nil

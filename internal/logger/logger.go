@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package logger
 
 import (
 	"github.com/pkg/errors"
@@ -62,6 +62,6 @@ func Close() {
 	}
 }
 
-func setLogLevel(level zapcore.Level) {
+func SetLogLevel(level zapcore.Level) {
 	dlevel.SetLevel(level)
 }

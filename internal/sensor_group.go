@@ -16,4 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package internal
+
+type sensorGroup struct {
+	sensors     []*SensorController
+	averageFunc string
+}

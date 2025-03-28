@@ -16,15 +16,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package main
+package safe_mqtt
 
 import (
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/antst/mzotbc/internal/logger"
 	"sync"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-// Client is bridge between our app and MQTT
+const (
+	reconnectInterval = 2 * time.Second
+)
+
+// MqttClient is bridge between our app and MQTT
 type MqttClient interface {
 	SafePublish(topic string, qos byte, retained bool, payload interface{}) mqtt.Token
 	SafeSubscribe(topic string, qos byte, callback mqtt.MessageHandler) mqtt.Token
@@ -37,51 +43,47 @@ type mqttClient struct {
 }
 
 var (
-	connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-		// TODO: use proper logger
+	connectHandler = func(client mqtt.Client) {
 		or := client.OptionsReader()
-		L().Warnln("Connected to MQTT broker:", or.Servers(), "as", or.ClientID())
+		logger.L().Infof("Connected to MQTT broker: %v as %s", or.Servers(), or.ClientID())
 	}
-	connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-		// TODO: use proper logger
-		L().Warnf("Connection to MQTT broker lost: %v", err)
-		for {
-			if token := client.Connect(); token.Wait() && token.Error() != nil {
-				L().Warnf("Connection was not a success, will retry in 2 sec\n")
-				time.Sleep(time.Second * 2)
-			} else {
-				break
-			}
-		}
-		client.Connect()
+
+	connectLostHandler = func(client mqtt.Client, err error) {
+		logger.L().Warnf("Connection to MQTT broker lost: %v", err)
+		reconnectMQTT(client)
 	}
 )
 
 func InitMQTTClient(url, clientID string) MqttClient {
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(url)
-	opts.SetClientID(clientID)
+	opts := mqtt.NewClientOptions().
+		AddBroker(url).
+		SetClientID(clientID).
+		SetAutoReconnect(true).
+		SetMaxReconnectInterval(reconnectInterval)
+
+	opts.OnConnect = connectHandler
+	opts.OnConnectionLost = connectLostHandler
+
 	//opts.SetUsername(cfg.USER)
 	//opts.SetPassword(cfg.PASSWORD)
 	// opts.SetDefaultPublishHandler(messagePubHandler)
-	opts.OnConnect = connectHandler
-	opts.OnConnectionLost = connectLostHandler
-	opts.SetAutoReconnect(true)
-	opts.SetMaxReconnectInterval(2 * time.Second)
 
 	client := mqtt.NewClient(opts)
+	reconnectMQTT(client)
+
+	return &mqttClient{
+		mqtt: client,
+	}
+}
+
+func reconnectMQTT(client mqtt.Client) {
 	for {
 		if token := client.Connect(); token.Wait() && token.Error() != nil {
-			L().Warnf("Connection was not a success, will retry in 2 sec\n")
-			time.Sleep(time.Second * 2)
+			logger.L().Warnf("Connection failed, retrying in %v: %v", reconnectInterval, token.Error())
+			time.Sleep(reconnectInterval)
 		} else {
 			break
 		}
-	}
-
-	return &mqttClient{
-		mutex: sync.Mutex{},
-		mqtt:  client,
 	}
 }
 
